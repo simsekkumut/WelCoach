@@ -14,6 +14,59 @@
     display: flex;
     flex-direction: column;
   }
+
+  /* ── API KEY MODAL ── */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(8,12,20,.95);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000;
+    padding: 16px;
+  }
+  .modal-box {
+    background: #0d1220;
+    border: 1px solid #1a2a4a;
+    border-radius: 18px;
+    padding: 32px 28px;
+    max-width: 420px;
+    width: 100%;
+    text-align: center;
+  }
+  .modal-icon { font-size: 40px; margin-bottom: 14px; }
+  .modal-box h2 { font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 8px; }
+  .modal-box h2 span { color: #00c6ff; }
+  .modal-box p { font-size: 13px; color: #7a85aa; line-height: 1.6; margin-bottom: 20px; }
+  .modal-box input {
+    width: 100%;
+    background: #080c14;
+    border: 1px solid #1a2a4a;
+    border-radius: 10px;
+    color: #e8e6de;
+    font-size: 14px;
+    padding: 12px 14px;
+    outline: none;
+    margin-bottom: 12px;
+    font-family: monospace;
+    letter-spacing: 1px;
+    transition: border-color .15s;
+  }
+  .modal-box input:focus { border-color: #0072ff88; }
+  .modal-box input::placeholder { color: #2a3050; letter-spacing: 0; font-family: inherit; }
+  .modal-start-btn {
+    width: 100%;
+    background: linear-gradient(135deg, #00c6ff, #0072ff);
+    border: none; border-radius: 10px;
+    color: #fff; font-size: 15px; font-weight: 600;
+    padding: 13px;
+    cursor: pointer;
+    box-shadow: 0 4px 20px #0072ff33;
+    transition: opacity .15s;
+  }
+  .modal-start-btn:hover { opacity: .88; }
+  .modal-note { font-size: 11px; color: #2a3050; margin-top: 12px; line-height: 1.5; }
+  .modal-note a { color: #00c6ff; text-decoration: none; }
+
+  /* ── HEADER ── */
   .header {
     background: #0d1220;
     border-bottom: 1px solid #1a2035;
@@ -40,6 +93,14 @@
   .online-dot { width: 6px; height: 6px; background: #3dd68c; border-radius: 50%; animation: pulse 2s infinite; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
   .latam-badge { background: #0d1220; border: 1px solid #1a2035; border-radius: 20px; padding: 4px 10px; font-size: 11px; color: #7a85aa; }
+  .key-btn {
+    background: #0d1220; border: 1px solid #1a2035; border-radius: 20px;
+    padding: 4px 10px; font-size: 11px; color: #4a5580;
+    cursor: pointer; transition: all .15s;
+  }
+  .key-btn:hover { border-color: #00c6ff44; color: #00c6ff; }
+
+  /* ── CHAT ── */
   .chat-area {
     flex: 1; overflow-y: auto; padding: 28px 16px 16px;
     display: flex; flex-direction: column; gap: 18px;
@@ -106,6 +167,21 @@
 </head>
 <body>
 
+<!-- API KEY MODAL -->
+<div class="modal-overlay" id="apiModal">
+  <div class="modal-box">
+    <div class="modal-icon">🔑</div>
+    <h2>Conectar <span>WelCoach</span></h2>
+    <p>Para usar WelCoach necesitas tu API key de Anthropic. Tu clave se guarda solo en tu navegador y nunca se comparte con nadie.</p>
+    <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-..." autocomplete="off" />
+    <button class="modal-start-btn" onclick="startWithKey()">Iniciar WelCoach →</button>
+    <div class="modal-note">
+      ¿No tienes API key? Obtenla gratis en <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a><br>
+      Tu clave se guarda en localStorage de tu navegador.
+    </div>
+  </div>
+</div>
+
 <div class="header">
   <div class="logo-wrap">
     <div class="logo-icon">🏆</div>
@@ -115,6 +191,7 @@
     </div>
   </div>
   <div class="header-right">
+    <button class="key-btn" onclick="changeKey()">🔑 Cambiar key</button>
     <div class="latam-badge">🌎 Latinoamérica</div>
     <div class="online-badge"><div class="online-dot"></div>En línea</div>
   </div>
@@ -179,9 +256,6 @@
 </div>
 
 <script>
-// ⬇️ BURAYA KENDİ CLOUDFLARE WORKER URL'İNİ YAZ
-const WORKER_URL = 'https://welcoach.KULLANICI_ADIN.workers.dev';
-
 const SYSTEM_PROMPT = `Eres WelCoach, el coach estratégico oficial para los partners IB (Introducing Brokers) de Weltrade en Latinoamérica.
 
 Tu personalidad: profesional pero cercano, directo, motivador. Hablas como un coach de negocios experimentado, no como un bot genérico.
@@ -205,6 +279,35 @@ Cómo respondes:
 PROHIBIDO: consejos de inversión, trades específicos, garantías de ganancias.`;
 
 const history = [];
+let API_KEY = '';
+
+// ── On load: check saved key ──
+window.addEventListener('DOMContentLoaded', () => {
+  const saved = localStorage.getItem('welcoach_api_key');
+  if (saved) {
+    API_KEY = saved;
+    document.getElementById('apiModal').style.display = 'none';
+  }
+});
+
+function startWithKey() {
+  const val = document.getElementById('apiKeyInput').value.trim();
+  if (!val.startsWith('sk-ant-')) {
+    document.getElementById('apiKeyInput').style.borderColor = '#ff4466';
+    document.getElementById('apiKeyInput').placeholder = '❌ Formato inválido. Debe empezar con sk-ant-...';
+    return;
+  }
+  API_KEY = val;
+  localStorage.setItem('welcoach_api_key', val);
+  document.getElementById('apiModal').style.display = 'none';
+}
+
+function changeKey() {
+  localStorage.removeItem('welcoach_api_key');
+  API_KEY = '';
+  document.getElementById('apiKeyInput').value = '';
+  document.getElementById('apiModal').style.display = 'flex';
+}
 
 function fillInput(text) {
   const el = document.getElementById('userInput');
@@ -252,6 +355,11 @@ async function sendMessage() {
   const text = input.value.trim();
   if (!text) return;
 
+  if (!API_KEY) {
+    document.getElementById('apiModal').style.display = 'flex';
+    return;
+  }
+
   input.value = '';
   input.style.height = 'auto';
   btn.disabled = true;
@@ -264,9 +372,14 @@ async function sendMessage() {
   document.getElementById('chatArea').scrollTop = 99999;
 
   try {
-    const res = await fetch(WORKER_URL, {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': API_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 1000,
@@ -274,14 +387,24 @@ async function sendMessage() {
         messages: history
       })
     });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const msg = err?.error?.message || `Error ${res.status}`;
+      throw new Error(msg);
+    }
+
     const data = await res.json();
     const reply = data.content?.[0]?.text || 'Ocurrió un error, intenta de nuevo.';
     history.push({ role: 'assistant', content: reply });
     tw.style.display = 'none';
     addMsg('ai', fmt(reply));
-  } catch {
+  } catch(e) {
     tw.style.display = 'none';
-    addMsg('ai', '⚠️ Error de conexión. Por favor intenta de nuevo.');
+    const msg = e.message?.includes('401')
+      ? '🔑 API key inválida. <span style="cursor:pointer;color:#00c6ff;text-decoration:underline" onclick="changeKey()">Haz clic aquí para cambiarla.</span>'
+      : `⚠️ ${e.message || 'Error de conexión. Por favor intenta de nuevo.'}`;
+    addMsg('ai', msg);
   }
 
   btn.disabled = false;
